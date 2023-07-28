@@ -1,2 +1,2 @@
-# test-disc-bot
+# TRASH SMP TEAMS BOT WOOHOOOOOOOOOOOOOOO
 test
