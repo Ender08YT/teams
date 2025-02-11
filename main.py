@@ -23,8 +23,6 @@ bot = commands.Bot(intents=intents)
 dotenv_path = Path("G:\Downloads\Teams\secrets.env")
 load_dotenv(dotenv_path=dotenv_path)
 TOKEN = os.getenv('TEAMSTOKEN')
-print(TOKEN)
-
 all_teams = ("sample team")
 
 @bot.event
@@ -324,7 +322,7 @@ async def members_autocompletion(ctx: nextcord.Interaction, team: str):
         await ctx.response.send_autocomplete(choices)
 
 
-@team.subcommand(description="add someone to a team")
+@team.subcommand(description="Add someone to a team")
 async def add(ctx: nextcord.Interaction, member: nextcord.Member):
         await check_for_data(ctx=ctx)
         await check_member_for_data(ctx, member)
@@ -348,7 +346,13 @@ async def add(ctx: nextcord.Interaction, member: nextcord.Member):
             await member.add_roles(role)
             await cursor.execute("UPDATE teams SET team = ? WHERE user = ? AND guild = ?", (team[0], member.id, ctx.guild.id,))
             await bot.db.commit()
-            await ctx.send(f"{member.mention} has been added to {role.mention}!", ephemeral=False)
+            await cursor.execute("SELECT teamchannel FROM serversettings WHERE guild = ?", (ctx.guild.id,))
+            teamchannel = await cursor.fetchone()
+            if teamchannel[0] == -1:
+                return await ctx.send(f"{member.mention} has been added to {role.mention}.", ephemeral=False)
+            channel = ctx.guild.get_channel(teamchannel[0])
+            await channel.send(f"{member.mention} has been added to {role.mention}.")
+            return await ctx.send("Member succesfully added.", ephemeral=True)
 
 @team.subcommand(description="Transfer ownership of your team")
 async def transfer(ctx: nextcord.Interaction, member: nextcord.Member):
@@ -438,7 +442,43 @@ async def leave(ctx: nextcord.Interaction):
         await cursor.execute("UPDATE teams SET role = ? WHERE user = ? AND guild = ?", (ctx.guild.default_role.id, ctx.user.id, ctx.guild.id,))
         await bot.db.commit()
         await ctx.send(f"Successfully left {team[0]}.", ephemeral=True)
-         
+
+@team.subcommand(description="Remove someone from your team")
+async def remove(ctx: nextcord.Interaction, member:nextcord.Member):
+    await check_for_data(ctx=ctx)
+    await check_member_for_data(ctx, member)
+    if member.id == ctx.user.id:
+            return await ctx.send("You can't remove *yourself* from a team -- try /team leave instead.", ephemeral=True)            
+    async with bot.db.cursor() as cursor:
+        await cursor.execute("SELECT team FROM teams WHERE user = ? AND guild = ?", (ctx.user.id, ctx.guild.id,))
+        team = await cursor.fetchone()
+        if team[0] == "Unaffiliated":
+            return await ctx.send("You're not even in a team! Nice try, though.", ephemeral=True)
+        await cursor.execute("SELECT team FROM teams WHERE user = ? AND guild = ?", (member.id, ctx.guild.id,))
+        mem_team = await cursor.fetchone()
+        if mem_team[0] != team[0]:
+            return await ctx.send("This member isn't even on your team!", ephemeral=True)
+        await cursor.execute("SELECT rank FROM teams WHERE user = ? AND guild = ?", (ctx.user.id, ctx.guild.id,))
+        rank = await cursor.fetchone()
+        if rank[0] != "Owner":
+            return await ctx.send("Only a team's owner can remove members from a team.", ephemeral=True)
+
+        await cursor.execute("SELECT role FROM teams WHERE team = ? AND guild = ? AND rank = ?", (team[0], ctx.guild.id, "Owner"))
+        role = await cursor.fetchone()
+        role = ctx.guild.get_role(role[0])
+        await member.remove_roles(role)
+        await cursor.execute("UPDATE teams SET team = ? WHERE user = ? AND guild = ?", ("Unaffiliated", member.id, ctx.guild.id,))
+        await cursor.execute("UPDATE teams SET role = ? WHERE user = ? AND guild = ?", (ctx.guild.default_role.id, member.id, ctx.guild.id,))
+        await bot.db.commit()
+        await cursor.execute("SELECT teamchannel FROM serversettings WHERE guild = ?", (ctx.guild.id,))
+        teamchannel = await cursor.fetchone()
+        if teamchannel[0] == -1:
+            return await ctx.send(f"{member.mention} has been removed from {role.mention}.", ephemeral=False)
+        channel = ctx.guild.get_channel(teamchannel[0])
+        await channel.send(f"{member.mention} has been removed from {role.mention}.")
+        return await ctx.send("Member succesfully removed.", ephemeral=True)
+
+                 
 
 @team.subcommand(description="Lists all the members on the entered team (or your team if nothing is entered)")
 async def members(ctx: nextcord.Interaction, team: str = nextcord.SlashOption("team")):
@@ -588,6 +628,13 @@ async def jointoggle(ctx: nextcord.Interaction):
             print("coin")
             return await ctx.send("Joining has been disabled.", ephemeral=True)
             
-            
+@bot.slash_command(description="Set the channel for transactions (Default: where the command is ran)", default_member_permissions = 8)
+async def teamchannel(ctx: nextcord.Interaction):
+    async with bot.db.cursor() as cursor:
+        await check_server_for_data(ctx)
+        channel = ctx.channel
+        await cursor.execute("UPDATE serversettings SET teamchannel =? WHERE guild = ?", (channel.id, ctx.guild.id,))      
+        await bot.db.commit()
+        return await ctx.send(f"Transaction channel set to {channel.mention}.", ephemeral=True)      
 
 bot.run(TOKEN)
