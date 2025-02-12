@@ -642,6 +642,69 @@ async def color(ctx: nextcord.Interaction, color: str = nextcord.SlashOption(des
         else:
             await ctx.send("Only a team's owner can run this command.", ephemeral=True)
 
+@bot.slash_command(description="[ADMIN] Delete another team.", default_member_permissions = 8)
+async def delteam(ctx: nextcord.Interaction, team: str = nextcord.SlashOption('team') ):       
+    async with bot.db.cursor() as cursor:
+        # Deletes channel
+        await cursor.execute("SELECT channel FROM teams WHERE guild = ? AND team = ? AND rank = ?", (ctx.guild.id, team, "Owner"))
+        channel = await cursor.fetchone()
+        channel = ctx.guild.get_channel(channel[0])
+        await channel.delete()
+        # Deletes VC
+        await cursor.execute("SELECT vchannel FROM teams WHERE guild = ? AND team = ? AND rank = ?", (ctx.guild.id, team, "Owner"))
+        vchannel = await cursor.fetchone()
+        vchannel = ctx.guild.get_channel(vchannel[0])
+        await vchannel.delete()
+        # Deletes category
+        await cursor.execute("SELECT category FROM teams WHERE guild = ? AND team = ? AND rank = ?", (ctx.guild.id, team, "Owner"))
+        category = await cursor.fetchone()
+        category = ctx.guild.get_channel(category[0])
+        await category.delete()
+        # Deletes role
+        await cursor.execute("SELECT role FROM teams WHERE guild = ? AND team = ? AND rank = ?", (ctx.guild.id, team, "Owner"))
+        role = await cursor.fetchone()
+        role = ctx.guild.get_role(role[0])
+        await role.delete()
+        # Updates teams.db        
+        await cursor.execute("UPDATE teams SET role = ? WHERE team = ? AND guild = ?", (ctx.guild.default_role.id, team, ctx.guild.id,))
+        await cursor.execute("UPDATE teams SET channel = ? WHERE team = ? AND guild = ?", (ctx.guild.system_channel.id, team, ctx.guild.id,))
+        await cursor.execute("UPDATE teams SET vchannel = ? WHERE team = ? AND guild = ?", (ctx.guild.system_channel.id, team, ctx.guild.id,))
+        await cursor.execute("UPDATE teams SET rank = ? WHERE team = ? AND guild = ?", ("Member", team, ctx.guild.id,))
+        await cursor.execute("UPDATE teams SET team = ? WHERE team = ? AND guild = ?", ("Unaffiliated", team, ctx.guild.id,))
+        await cursor.execute("SELECT teamchannel FROM serversettings WHERE guild = ?", (ctx.guild.id,))
+        teamchannel = await cursor.fetchone()
+        if teamchannel[0] == -1:
+            return await ctx.send(f"\"{team[0]}\" has been deleted.", ephemeral=False)
+        channel = ctx.guild.get_channel(teamchannel[0])
+        await channel.send(f"\"{team[0]}\" has been deleted.")
+        return await ctx.send(f"Successfully deleted {team[0]}.", ephemeral=True)
+
+@delteam.on_autocomplete('team')
+async def members_autocompletion(ctx: nextcord.Interaction, team: str):
+    async with bot.db.cursor() as cursor:
+        choices = await fetch_choices(ctx.guild.id)
+        await ctx.response.send_autocomplete(choices)
+
+@bot.slash_command(description="[ADMIN] Reset a member's internal data (CAN BREAK TEAMS; BE CAREFUL).", default_member_permissions = 8)
+async def memreset(ctx: nextcord.Interaction, member: nextcord.Member):       
+    async with bot.db.cursor() as cursor:       
+        await cursor.execute("SELECT rank FROM teams WHERE guild = ? AND user = ?", (ctx.guild.id, member.id,))
+        rank = await cursor.fetchone()
+        if rank[0] == "Owner":
+            await cursor.execute("SELECT team FROM teams WHERE user = ? AND guild = ?", (member.id, ctx.guild.id,))
+            team = await cursor.fetchone()
+            await cursor.execute("SELECT user, rank FROM teams WHERE team = ? AND guild = ?", (team[0], ctx.guild.id,))
+            data = await cursor.fetchall()
+            print(data)
+            if len(data) > 1:
+                return await ctx.send("This member owns a team with other members. Doing this would be a mistake.", ephemeral=True)
+        await cursor.execute("UPDATE teams SET role = ? WHERE user = ? AND guild = ?", (ctx.guild.default_role.id, member.id, ctx.guild.id,))
+        await cursor.execute("UPDATE teams SET channel = ? WHERE user = ? AND guild = ?", (ctx.guild.system_channel.id, member.id, ctx.guild.id,))
+        await cursor.execute("UPDATE teams SET vchannel = ? WHERE user = ? AND guild = ?", (ctx.guild.system_channel.id, member.id, ctx.guild.id,))
+        await cursor.execute("UPDATE teams SET rank = ? WHERE user = ? AND guild = ?", ("Member", member.id, ctx.guild.id,))
+        await cursor.execute("UPDATE teams SET team = ? WHERE user = ? AND guild = ?", ("Unaffiliated", member.id, ctx.guild.id,))
+        return await ctx.send(f"Successfully reset {member.name}.", ephemeral=True)
+
 @bot.slash_command(description="Toggle whether members can join teams, or if they have to be added.", default_member_permissions = 8)
 async def jointoggle(ctx: nextcord.Interaction):
     async with bot.db.cursor() as cursor:
@@ -660,6 +723,8 @@ async def jointoggle(ctx: nextcord.Interaction):
             await bot.db.commit()
             print("coin")
             return await ctx.send("Joining has been disabled.", ephemeral=True)
+
+            await bot.db.commit()
             
 @bot.slash_command(description="Set the channel for transactions (-1 to set to where the command is ran)", default_member_permissions = 8)
 async def teamchannel(ctx: nextcord.Interaction):
