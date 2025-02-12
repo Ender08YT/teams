@@ -22,7 +22,7 @@ intents.members = True
 bot = commands.Bot(intents=intents)
 dotenv_path = Path("G:\Downloads\Teams\secrets.env")
 load_dotenv(dotenv_path=dotenv_path)
-TOKEN = os.getenv('TEAMSTOKEN')
+TOKEN = os.getenv('TOKEN')
 all_teams = ("sample team")
 
 @bot.event
@@ -264,7 +264,13 @@ async def create(ctx: nextcord.Interaction, name: str = nextcord.SlashOption(des
             await cursor.execute("UPDATE teams SET vchannel = ? WHERE user = ? AND guild = ?", (vchannel.id, ctx.user.id, ctx.guild.id,))
             await cursor.execute("UPDATE teams SET category = ? WHERE user = ? AND guild = ?", (category.id, ctx.user.id, ctx.guild.id,))
             await bot.db.commit()
-            await ctx.send("Your team has been created!")
+            await cursor.execute("SELECT teamchannel FROM serversettings WHERE guild = ?", (ctx.guild.id,))
+            teamchannel = await cursor.fetchone()
+            if teamchannel[0] == -1:
+                return await ctx.send(f"{role.mention} has been created by {ctx.user.mention}.", ephemeral=False)
+            channel = ctx.guild.get_channel(teamchannel[0])
+            await channel.send(f"{role.mention} has been created by {ctx.user.mention}.")
+            return await ctx.send("Team succesfully created!", ephemeral=True)
     else:
         await ctx.send("That's not a valid hex code.", ephemeral=True)
 
@@ -339,7 +345,16 @@ async def add(ctx: nextcord.Interaction, member: nextcord.Member):
             rank = await cursor.fetchone()
             if rank[0] != "Owner":
                 return await ctx.send("Only a team's owner can add members to a team.", ephemeral=True)
-
+            await cursor.execute("SELECT maxmembers FROM serversettings WHERE guild = ?", (ctx.guild.id,))
+            maxmembers = await cursor.fetchone()
+            await cursor.execute("SELECT user FROM teams WHERE team = ? AND guild = ?", (team[0], ctx.guild.id,))
+            data = await cursor.fetchall()
+            if data:
+                count = 0
+                for table in data:
+                    count += 1
+            if count >= maxmembers[0]:
+                return await ctx.send(f"Your team is already at max capacity! Max members on this server is {maxmembers[0]}.", ephemeral=True)
             await cursor.execute("SELECT role FROM teams WHERE user = ? AND guild = ?", (ctx.user.id, ctx.guild.id,))
             role = await cursor.fetchone()
             role = ctx.guild.get_role(role[0])
@@ -441,7 +456,13 @@ async def leave(ctx: nextcord.Interaction):
         await cursor.execute("UPDATE teams SET team = ? WHERE user = ? AND guild = ?", ("Unaffiliated", ctx.user.id, ctx.guild.id,))
         await cursor.execute("UPDATE teams SET role = ? WHERE user = ? AND guild = ?", (ctx.guild.default_role.id, ctx.user.id, ctx.guild.id,))
         await bot.db.commit()
-        await ctx.send(f"Successfully left {team[0]}.", ephemeral=True)
+        await cursor.execute("SELECT teamchannel FROM serversettings WHERE guild = ?", (ctx.guild.id,))
+        teamchannel = await cursor.fetchone()
+        if teamchannel[0] == -1:
+            return await ctx.send(f"{ctx.user.mention} has left {role.mention}.", ephemeral=False)
+        channel = ctx.guild.get_channel(teamchannel[0])
+        await channel.send(f"{ctx.user.mention} has left {role.mention}.")
+        return await ctx.send(f"Succesfully left {role.mention}.", ephemeral=True)
 
 @team.subcommand(description="Remove someone from your team")
 async def remove(ctx: nextcord.Interaction, member:nextcord.Member):
@@ -628,7 +649,7 @@ async def jointoggle(ctx: nextcord.Interaction):
             print("coin")
             return await ctx.send("Joining has been disabled.", ephemeral=True)
             
-@bot.slash_command(description="Set the channel for transactions (Default: where the command is ran)", default_member_permissions = 8)
+@bot.slash_command(description="Set the channel for transactions (-1 to set to where the command is ran)", default_member_permissions = 8)
 async def teamchannel(ctx: nextcord.Interaction):
     async with bot.db.cursor() as cursor:
         await check_server_for_data(ctx)
@@ -636,5 +657,13 @@ async def teamchannel(ctx: nextcord.Interaction):
         await cursor.execute("UPDATE serversettings SET teamchannel =? WHERE guild = ?", (channel.id, ctx.guild.id,))      
         await bot.db.commit()
         return await ctx.send(f"Transaction channel set to {channel.mention}.", ephemeral=True)      
+
+@bot.slash_command(description="Set the maximum number of members that can be on a team (-1 to disable) ", default_member_permissions = 8)
+async def maxmembers(ctx: nextcord.Interaction, max: int = nextcord.SlashOption(description="Max amount of members that can be on a team (-1 to disable maximum): ")):
+    async with bot.db.cursor() as cursor:
+        await check_server_for_data(ctx)
+        await cursor.execute("UPDATE serversettings SET maxmembers =? WHERE guild = ?", (max, ctx.guild.id,))      
+        await bot.db.commit()
+        return await ctx.send(f"Maximum members set to {max}.", ephemeral=True) 
 
 bot.run(TOKEN)
