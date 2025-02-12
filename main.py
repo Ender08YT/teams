@@ -354,14 +354,15 @@ async def add(ctx: nextcord.Interaction, member: nextcord.Member):
                 return await ctx.send("Only a team's owner can add members to a team.", ephemeral=True)
             await cursor.execute("SELECT maxmembers FROM serversettings WHERE guild = ?", (ctx.guild.id,))
             maxmembers = await cursor.fetchone()
-            await cursor.execute("SELECT user FROM teams WHERE team = ? AND guild = ?", (team[0], ctx.guild.id,))
-            data = await cursor.fetchall()
-            if data:
-                count = 0
-                for table in data:
-                    count += 1
-            if count >= maxmembers[0]:
-                return await ctx.send(f"Your team is already at max capacity! Max members on this server is {maxmembers[0]}.", ephemeral=True)
+            if maxmembers[0] != -1:
+                await cursor.execute("SELECT user FROM teams WHERE team = ? AND guild = ?", (team[0], ctx.guild.id,))
+                data = await cursor.fetchall()
+                if data:
+                    count = 0
+                    for table in data:
+                        count += 1
+                if count >= maxmembers[0]:
+                    return await ctx.send(f"Your team is already at max capacity! Max members on this server is {maxmembers[0]}.", ephemeral=True)
             await cursor.execute("SELECT role FROM teams WHERE user = ? AND guild = ?", (ctx.user.id, ctx.guild.id,))
             role = await cursor.fetchone()
             role = ctx.guild.get_role(role[0])
