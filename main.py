@@ -16,6 +16,7 @@ from random import choice
 from discord import app_commands
 from typing import List, Literal
 from pathlib import Path
+from typing import Optional
 intents = nextcord.Intents.default()
 intents.members = True
 
@@ -267,9 +268,9 @@ async def create(ctx: nextcord.Interaction, name: str = nextcord.SlashOption(des
             await cursor.execute("SELECT teamchannel FROM serversettings WHERE guild = ?", (ctx.guild.id,))
             teamchannel = await cursor.fetchone()
             if teamchannel[0] == -1:
-                return await ctx.send(f"{role.mention} has been created by {ctx.user.mention}.", ephemeral=False)
+                return await ctx.send(f"{role.mention} ({name}) has been created by {ctx.user.mention}.", ephemeral=False)
             channel = ctx.guild.get_channel(teamchannel[0])
-            await channel.send(f"{role.mention} has been created by {ctx.user.mention}.")
+            await channel.send(f"{role.mention} ({name}) has been created by {ctx.user.mention}.")
             return await ctx.send("Team succesfully created!", ephemeral=True)
     else:
         await ctx.send("That's not a valid hex code.", ephemeral=True)
@@ -315,7 +316,13 @@ async def join(ctx: nextcord.Interaction, name: str = nextcord.SlashOption(descr
                 await ctx.user.add_roles(role)
                 await cursor.execute("UPDATE teams SET team = ? WHERE user = ? AND guild = ?", (team, ctx.user.id, ctx.guild.id,))
                 await bot.db.commit()
-                await ctx.send(f"Successfully joined {data[count][0]}!", ephemeral=True)
+                await cursor.execute("SELECT teamchannel FROM serversettings WHERE guild = ?", (ctx.guild.id,))
+                teamchannel = await cursor.fetchone()
+                if teamchannel[0] == -1:
+                    return await ctx.send(f"{ctx.user.mention} has joined {role.mention} ({data[count][0]}).", ephemeral=False)
+                channel = ctx.guild.get_channel(teamchannel[0])
+                await channel.send(f"{ctx.user.mention} has joined {role.mention} ({data[count][0]})!")
+                return await ctx.send(f"Successfully joined {role.mention} ({data[count][0]})!", ephemeral=True)
             else:
                 return await ctx.send("This team doesn't exist! Try using /team create instead.", ephemeral=True)
             
@@ -364,9 +371,9 @@ async def add(ctx: nextcord.Interaction, member: nextcord.Member):
             await cursor.execute("SELECT teamchannel FROM serversettings WHERE guild = ?", (ctx.guild.id,))
             teamchannel = await cursor.fetchone()
             if teamchannel[0] == -1:
-                return await ctx.send(f"{member.mention} has been added to {role.mention}.", ephemeral=False)
+                return await ctx.send(f"{member.mention} has been added to {role.mention} ({team[0]}).", ephemeral=False)
             channel = ctx.guild.get_channel(teamchannel[0])
-            await channel.send(f"{member.mention} has been added to {role.mention}.")
+            await channel.send(f"{member.mention} has been added to {role.mention} ({team[0]}).")
             return await ctx.send("Member succesfully added.", ephemeral=True)
 
 @team.subcommand(description="Transfer ownership of your team")
@@ -445,7 +452,13 @@ async def leave(ctx: nextcord.Interaction):
                 if view.value is None:
                     return
                 elif view.value:
-                    return await ctx.send(f"Successfully deleted {team[0]}.", ephemeral=True)
+                    await cursor.execute("SELECT teamchannel FROM serversettings WHERE guild = ?", (ctx.guild.id,))
+                    teamchannel = await cursor.fetchone()
+                    if teamchannel[0] == -1:
+                        return await ctx.send(f"{team[0]} has been disbanded!", ephemeral=False)
+                    channel = ctx.guild.get_channel(teamchannel[0])
+                    await channel.send(f"\"{team[0]}\" has been disbanded!")
+                    return await ctx.send(f"Successfully deleted {team[0]}", ephemeral=True)
                 else:
                     return await ctx.send("Deletion request canceled.", ephemeral=True)
 
@@ -459,10 +472,10 @@ async def leave(ctx: nextcord.Interaction):
         await cursor.execute("SELECT teamchannel FROM serversettings WHERE guild = ?", (ctx.guild.id,))
         teamchannel = await cursor.fetchone()
         if teamchannel[0] == -1:
-            return await ctx.send(f"{ctx.user.mention} has left {role.mention}.", ephemeral=False)
+            return await ctx.send(f"{ctx.user.mention} has left {role.mention} ({team[0]}).", ephemeral=False)
         channel = ctx.guild.get_channel(teamchannel[0])
-        await channel.send(f"{ctx.user.mention} has left {role.mention}.")
-        return await ctx.send(f"Succesfully left {role.mention}.", ephemeral=True)
+        await channel.send(f"{ctx.user.mention} has left {role.mention} ({team[0]}).")
+        return await ctx.send(f"Succesfully left {role.mention} ({team[0]}).", ephemeral=True)
 
 @team.subcommand(description="Remove someone from your team")
 async def remove(ctx: nextcord.Interaction, member:nextcord.Member):
@@ -494,15 +507,13 @@ async def remove(ctx: nextcord.Interaction, member:nextcord.Member):
         await cursor.execute("SELECT teamchannel FROM serversettings WHERE guild = ?", (ctx.guild.id,))
         teamchannel = await cursor.fetchone()
         if teamchannel[0] == -1:
-            return await ctx.send(f"{member.mention} has been removed from {role.mention}.", ephemeral=False)
+            return await ctx.send(f"{member.mention} has been removed from {role.mention} ({team[0]}).", ephemeral=False)
         channel = ctx.guild.get_channel(teamchannel[0])
-        await channel.send(f"{member.mention} has been removed from {role.mention}.")
+        await channel.send(f"{member.mention} has been removed from {role.mention} ({team[0]}).")
         return await ctx.send("Member succesfully removed.", ephemeral=True)
 
-                 
-
 @team.subcommand(description="Lists all the members on the entered team (or your team if nothing is entered)")
-async def members(ctx: nextcord.Interaction, team: str = nextcord.SlashOption("team")):
+async def members(ctx: nextcord.Interaction, team: Optional[str] = nextcord.SlashOption('team')):
     await check_for_data(ctx=ctx)
     team_found = False
     async with bot.db.cursor() as cursor:
