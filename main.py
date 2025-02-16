@@ -31,7 +31,7 @@ class PageChanger(nextcord.ui.View):
         super().__init__(timeout=None)
         self.value = None
 
-    @nextcord.ui.button(label='⇦ Previous Page', style=nextcord.ButtonStyle.gray)
+    @nextcord.ui.button(label='⇦ Previous Page', style=nextcord.ButtonStyle.red)
     async def previous(self, button: nextcord.ui.Button, ctx: nextcord.Interaction):
         global team_count
         async with bot.db.cursor() as cursor:
@@ -69,7 +69,7 @@ class PageChanger(nextcord.ui.View):
                     break
             await list_teams(current_list, ctx, None, "edit", countmax/10)
     
-    @nextcord.ui.button(label='Next Page ⇨', style=nextcord.ButtonStyle.gray)
+    @nextcord.ui.button(label='Next Page ⇨', style=nextcord.ButtonStyle.green)
     async def next(self, button: nextcord.ui.Button, ctx: nextcord.Interaction):
         global team_count
         async with bot.db.cursor() as cursor:
@@ -93,7 +93,7 @@ class PageChanger(nextcord.ui.View):
                 print("nooo")
                 team_count = 10
             try:
-                print(team_count, data[team_count])
+                print(team_count, team_list[team_count])
             except:
                 return await ctx.send(f"You're on the last page!", ephemeral=True)
             current_list = []
@@ -111,7 +111,7 @@ class PageChanger(nextcord.ui.View):
 async def list_teams(lst,ctx,view,msgtype,page):
     if msgtype == "new":
         em = nextcord.Embed(
-            title="All Teams\n", color=nextcord.Color(int("CCB18C", 16)))
+            title="All Teams\n", color=nextcord.Color(int("777777", 16)))
 
         for table in lst:
             name = table[0]
@@ -125,7 +125,7 @@ async def list_teams(lst,ctx,view,msgtype,page):
         return await ctx.send(embed=em, view=view)
     msg = ctx.message
     em = nextcord.Embed(
-    title=f"All teams:\n", color=nextcord.Color(int("CCB18C", 16)))
+    title=f"All teams:\n", color=nextcord.Color(int("777777", 16)))
 
     for table in lst:
         name = table[0]
@@ -449,6 +449,7 @@ async def members_autocompletion(ctx: nextcord.Interaction, team: str):
 async def add(ctx: nextcord.Interaction, member: nextcord.Member):
         await check_for_data(ctx=ctx)
         await check_member_for_data(ctx, member)
+        await ctx.response.defer()
         async with bot.db.cursor() as cursor:            
             await cursor.execute("SELECT team FROM teams WHERE user = ? AND guild = ?", (member.id, ctx.guild.id,))
             mem_team = await cursor.fetchone()
@@ -716,31 +717,34 @@ async def fetch_choices(guild_id):
 
 @team.subcommand(description="Lists all teams on the server")
 async def list(ctx: nextcord.Interaction):
+    global team_count
     async with bot.db.cursor() as cursor:
         await cursor.execute("SELECT team FROM teams WHERE guild = ?", (ctx.guild.id,))
         data = await cursor.fetchall()
-        
+        team_names = []
+        team_list = []
         current_teams = []
         if data:
             em = nextcord.Embed(title="All Teams:", color=nextcord.Color(int("AE02D0", 16)))
             for table in data:
-                if not table[0] in current_teams and table[0] != "Unaffiliated":
+                if not table[0] in team_names and table[0] != "Unaffiliated":
                     await cursor.execute("SELECT user FROM teams WHERE guild = ? AND team = ?", (ctx.guild.id, table[0]))
                     members = await cursor.fetchall()
                     memcount = len(members)
-                    em.add_field(name=f"{table[0].title()}",
-                        value=f"Members: {memcount}", inline=False)
-                    current_teams.append(table[0])
+                    team_names.append(table[0])
+                    team_list.append((table[0],memcount))
                 else:
                     pass
-                current_teams.append(table[0])
-            await cursor.execute("SELECT user FROM teams WHERE guild = ? AND team = ?", (ctx.guild.id, "Unaffiliated"))
-            members = await cursor.fetchall()
-            memcount = len(members)
-            em.add_field(name='\u200b',
-                            value=f"Unaffiliated Members: {memcount}", inline=False)
-                
-            return await ctx.send(embed=em)
+        if len(team_list) <= 10:
+            return await list_teams(team_list, ctx, None, "new", 1)
+        view = PageChanger()
+        team_count = 0
+        current_list = []
+        while team_count < 10:
+            current_list.append(team_list[team_count])
+            team_count += 1
+            print(team_count, team_list[team_count])
+        return await list_teams(current_list, ctx, view, "new",1)
 
 
 @team.subcommand(description="Change your team color!")
