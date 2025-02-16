@@ -802,16 +802,19 @@ async def delteam(ctx: nextcord.Interaction, team: str = nextcord.SlashOption('t
         await cursor.execute("SELECT teamchannel FROM serversettings WHERE guild = ?", (ctx.guild.id,))
         teamchannel = await cursor.fetchone()
         if teamchannel[0] == -1:
-            return await ctx.send(f"\"{team[0]}\" has been deleted.", ephemeral=False)
+            return await ctx.send(f"\"{team}\" has been deleted.", ephemeral=False)
         channel = ctx.guild.get_channel(teamchannel[0])
         await channel.send(f"\"{team[0]}\" has been deleted.")
-        return await ctx.send(f"Successfully deleted {team[0]}.", ephemeral=True)
+        return await ctx.send(f"Successfully deleted {team}.", ephemeral=True)
 
 @delteam.on_autocomplete('team')
 async def members_autocompletion(ctx: nextcord.Interaction, team: str):
     async with bot.db.cursor() as cursor:
         choices = await fetch_choices(ctx.guild.id)
-        await ctx.response.send_autocomplete(choices)
+        if not team:
+            return await ctx.response.send_autocomplete(choices[:25]) # Show the first 25 if no input
+        filtered_options = [option for option in choices if team.lower() in option.lower()]
+        await ctx.response.send_autocomplete(filtered_options[:25])
 
 @bot.slash_command(description="[ADMIN] Reset a member's internal data (CAN BREAK TEAMS; BE CAREFUL).", default_member_permissions = 8)
 async def memreset(ctx: nextcord.Interaction, member: nextcord.Member):       
