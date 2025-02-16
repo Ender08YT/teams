@@ -141,13 +141,76 @@ async def list_teams(lst,ctx,view,msgtype,page):
 @bot.event
 async def on_ready():
     global all_teams
+    await bot.wait_until_ready()
     server_count = len(bot.guilds)
     print(f'{bot.user.name} is now online in {server_count} server(s)')
     setattr(bot, "db", await aiosqlite.connect("teams.db"))
     async with bot.db.cursor() as cursor:
         await cursor.execute("CREATE TABLE IF NOT EXISTS teams (user INTEGER, guild INTEGER, team STRING, rank STRING, role INTEGER, teamcolor STRING, channel INTEGER)")
         await cursor.execute("CREATE TABLE IF NOT EXISTS serversettings (guild INTEGER, jointoggle INTEGER, maxmembers INTEGER, teamchannel INTEGER)")
+    guilds = bot.guilds
+    server_count = len(guilds)
+    gnamelist = []
 
+    for guild in guilds:
+        gentry = []
+        gentry.append(guild.name)
+        gentry.append(guild.member_count)
+        gnamelist.append(gentry)
+    gnamelist.sort(key=lambda guild: guild[1], reverse=True)
+    for guild in gnamelist:
+        print(f"Name: {guild[0]}, Members: {guild[1]}")
+    mem_count = len(bot.users)
+    print(f'{bot.user.name} is now online in {server_count} server(s)')
+    await bot.change_presence(activity=nextcord.Activity(type=nextcord.ActivityType.competing, name=f"{server_count} servers with {mem_count} members!"))
+@bot.event
+async def on_member_remove(member):
+    async with bot.db.cursor() as cursor:
+        await cursor.execute("SELECT rank FROM teams WHERE user = ? AND guild = ?", (member.id, member.guild.id))
+        rank = await cursor.fetchone()
+        if rank[0] != "Owner":
+            print("jarvis, show me this guy's balls")
+            await cursor.execute("DELETE FROM teams WHERE user = ? AND guild = ?", (member.id, member.guild.id))
+            return await bot.db.commit()
+        print("let him cook")
+        await cursor.execute("SELECT team FROM teams WHERE user = ? AND guild = ?", (member.id, member.guild.id))
+        team = await cursor.fetchone()
+        team = team[0]
+        # Deletes channel
+        await cursor.execute("SELECT channel FROM teams WHERE guild = ? AND team = ? AND rank = ?", (member.guild.id, team, "Owner"))
+        channel = await cursor.fetchone()
+        channel = member.guild.get_channel(channel[0])
+        await channel.delete()
+        # Deletes VC
+        await cursor.execute("SELECT vchannel FROM teams WHERE guild = ? AND team = ? AND rank = ?", (member.guild.id, team, "Owner"))
+        vchannel = await cursor.fetchone()
+        vchannel = member.guild.get_channel(vchannel[0])
+        await vchannel.delete()
+        # Deletes category
+        await cursor.execute("SELECT category FROM teams WHERE guild = ? AND team = ? AND rank = ?", (member.guild.id, team, "Owner"))
+        category = await cursor.fetchone()
+        category = member.guild.get_channel(category[0])
+        await category.delete()
+        # Deletes role
+        await cursor.execute("SELECT role FROM teams WHERE guild = ? AND team = ? AND rank = ?", (member.guild.id, team, "Owner"))
+        role = await cursor.fetchone()
+        role = member.guild.get_role(role[0])
+        await role.delete()
+        # Updates teams.db        
+        await cursor.execute("UPDATE teams SET role = ? WHERE team = ? AND guild = ?", (member.guild.default_role.id, team, member.guild.id,))
+        await cursor.execute("UPDATE teams SET channel = ? WHERE team = ? AND guild = ?", (member.guild.system_channel.id, team, member.guild.id,))
+        await cursor.execute("UPDATE teams SET vchannel = ? WHERE team = ? AND guild = ?", (member.guild.system_channel.id, team, member.guild.id,))
+        await cursor.execute("UPDATE teams SET rank = ? WHERE team = ? AND guild = ?", ("Member", team, member.guild.id,))
+        await cursor.execute("UPDATE teams SET team = ? WHERE team = ? AND guild = ?", ("Unaffiliated", team, member.guild.id,))
+        await cursor.execute("SELECT teamchannel FROM serversettings WHERE guild = ?", (member.guild.id,))
+        teamchannel = await cursor.fetchone()
+        if teamchannel[0] == -1:
+            return await member.guild.system_channel.send(f"\"{team}\" has been deleted.", ephemeral=False)
+        channel = member.guild.get_channel(teamchannel[0])
+        await channel.send(f"\"{team}\" has been deleted.")
+        await cursor.execute("DELETE FROM teams WHERE user = ? AND guild = ?", (member.id, member.guild.id))
+        return await bot.db.commit()
+        
 async def check_for_data(ctx: nextcord.Interaction):
     if type(ctx) == nextcord.Message:
         async with bot.db.cursor() as cursor:
@@ -342,6 +405,7 @@ async def ohmygod(interaction: nextcord.Interaction):
 @team.subcommand(description="create a new team")
 async def create(ctx: nextcord.Interaction, name: str = nextcord.SlashOption(description="Enter your team's name:"), color: str = nextcord.SlashOption(description="Enter a valid hex code for your team's color (e.g. #FFFFFF):")):
     await check_for_data(ctx=ctx)
+    await check_server_for_data(ctx=ctx)
     await ctx.response.defer()
     match = search(r'^#(?:[0-9a-fA-F]{3}){1,2}$', color)
     if match:
@@ -770,6 +834,37 @@ async def color(ctx: nextcord.Interaction, color: str = nextcord.SlashOption(des
         else:
             await ctx.send("Only a team's owner can run this command.", ephemeral=True)
 
+@team.subcommand(description="Change your team name!")
+async def rename(ctx: nextcord.Interaction, name: str = nextcord.SlashOption(description="Enter a new name for your team: ")):
+    async with bot.db.cursor() as cursor:
+        await check_for_data(ctx=ctx)
+        await cursor.execute("SELECT rank FROM teams WHERE user = ? AND guild = ?", (ctx.user.id, ctx.guild.id,))
+        rank = await cursor.fetchone()
+        if rank[0] == "Owner":
+            await cursor.execute("SELECT team FROM teams WHERE guild = ?", (ctx.guild.id,))
+            data = await cursor.fetchall()
+            nametuple = (name,)
+            if nametuple in data:
+                return await ctx.send("There's already a team with this name!", ephemeral=True)
+            await cursor.execute("SELECT role, channel, vchannel, category, team FROM teams WHERE user = ? AND guild = ?", (ctx.user.id, ctx.guild.id,))
+            data = await cursor.fetchall()
+            data = data[0]
+            print(data)
+            
+            role = ctx.guild.get_role(data[0])
+            channel = ctx.guild.get_channel(data[1])
+            vchannel = ctx.guild.get_channel(data[2])
+            category = nextcord.utils.get(ctx.guild.categories, id=data[3])
+            await role.edit(name=name)
+            await channel.edit(name=name + "-chat")
+            await vchannel.edit(name=name + "-chat")
+            await category.edit(name=name)
+            await cursor.execute("UPDATE teams SET team = ? WHERE team = ? AND guild = ?", (name, data[4], ctx.guild.id,))
+            await bot.db.commit()
+            await ctx.send("Team name updated!")
+        else:
+            return await ctx.send("Only a team's owner can run this command.", ephemeral=True)
+
 @bot.slash_command(description="[ADMIN] Delete another team.", default_member_permissions = 8)
 async def delteam(ctx: nextcord.Interaction, team: str = nextcord.SlashOption('team') ):       
     async with bot.db.cursor() as cursor:
@@ -804,7 +899,7 @@ async def delteam(ctx: nextcord.Interaction, team: str = nextcord.SlashOption('t
         if teamchannel[0] == -1:
             return await ctx.send(f"\"{team}\" has been deleted.", ephemeral=False)
         channel = ctx.guild.get_channel(teamchannel[0])
-        await channel.send(f"\"{team[0]}\" has been deleted.")
+        await channel.send(f"\"{team}\" has been deleted.")
         return await ctx.send(f"Successfully deleted {team}.", ephemeral=True)
 
 @delteam.on_autocomplete('team')
