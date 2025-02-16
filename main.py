@@ -217,8 +217,6 @@ def hex_to_rgb(value):
     return tuple(int(value[i:i + lv // 3], 16) for i in range(0, lv, lv // 3))
 
 
-
-
 @bot.slash_command()
 async def team(interaction: nextcord.Interaction):
     pass
@@ -516,6 +514,7 @@ async def remove(ctx: nextcord.Interaction, member:nextcord.Member):
 @team.subcommand(description="Lists all the members on the entered team (or your team if nothing is entered)")
 async def members(ctx: nextcord.Interaction, team: Optional[str] = nextcord.SlashOption('team')):
     await check_for_data(ctx=ctx)
+    await ctx.response.defer()
     team_found = False
     async with bot.db.cursor() as cursor:
         if team == None:
@@ -569,7 +568,7 @@ async def members(ctx: nextcord.Interaction, team: Optional[str] = nextcord.Slas
                 count = 0
                 for table in data:
                     count += 1
-                    user = ctx.guild.get_member(table[0])
+                    user = await nextcord.fetch_member(table[0])
                     rank = table[1]
                     em.add_field(name=f"{count}. {user.name}",
                                 value=f"{rank}", inline=False)
@@ -579,7 +578,10 @@ async def members(ctx: nextcord.Interaction, team: Optional[str] = nextcord.Slas
 async def members_autocompletion(ctx: nextcord.Interaction, team: str):
     async with bot.db.cursor() as cursor:
         choices = await fetch_choices(ctx.guild.id)
-        await ctx.response.send_autocomplete(choices)
+        if not team:
+            return await ctx.response.send_autocomplete(choices[:25]) # Show the first 25 if no input
+        filtered_options = [option for option in choices if team.lower() in option.lower()]
+        await ctx.response.send_autocomplete(filtered_options[:25])
 
 
 async def fetch_choices(guild_id):
@@ -623,6 +625,7 @@ async def list(ctx: nextcord.Interaction):
 @team.subcommand(description="Change your team color!")
 async def color(ctx: nextcord.Interaction, color: str = nextcord.SlashOption(description="Enter a valid hex code (e.g. #FFFFFF): ")):
     async with bot.db.cursor() as cursor:
+        await check_for_data(ctx=ctx)
         await cursor.execute("SELECT rank FROM teams WHERE user = ? AND guild = ?", (ctx.user.id, ctx.guild.id,))
         rank = await cursor.fetchone()
         if rank[0] == "Owner":
@@ -723,8 +726,6 @@ async def jointoggle(ctx: nextcord.Interaction):
             await bot.db.commit()
             print("coin")
             return await ctx.send("Joining has been disabled.", ephemeral=True)
-
-            await bot.db.commit()
             
 @bot.slash_command(description="Set the channel for transactions (-1 to set to where the command is ran)", default_member_permissions = 8)
 async def teamchannel(ctx: nextcord.Interaction):
