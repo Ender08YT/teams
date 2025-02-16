@@ -26,6 +26,118 @@ load_dotenv(dotenv_path=dotenv_path)
 TOKEN = os.getenv('TOKEN')
 all_teams = ("sample team")
 
+class PageChanger(nextcord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+        self.value = None
+
+    @nextcord.ui.button(label='⇦ Previous Page', style=nextcord.ButtonStyle.gray)
+    async def previous(self, button: nextcord.ui.Button, ctx: nextcord.Interaction):
+        global team_count
+        async with bot.db.cursor() as cursor:
+            self.value = "last"
+            await cursor.execute("SELECT team FROM teams WHERE guild = ?", (ctx.guild.id,))
+            data = await cursor.fetchall()
+            team_names = []
+            team_list = []
+            for table in data:
+                if not table[0] in team_names and table[0] != "Unaffiliated":
+                    await cursor.execute("SELECT user FROM teams WHERE guild = ? AND team = ?", (ctx.guild.id, table[0]))
+                    members = await cursor.fetchall()
+                    memcount = len(members)
+                    team_names.append(table[0])
+                    team_list.append((table[0],memcount))
+                else:
+                    pass
+            try:
+                team_count
+            except:
+                print("nooo")
+                team_count = 20
+            current_list = []
+            team_count -= 20
+            if team_count < 0:
+                team_count += 20
+                return await ctx.send(f"You're on the first page!", ephemeral=True)
+            countmax = team_count + 10
+            while team_count < countmax:
+                try:
+                    current_list.append(team_list[team_count])
+                    team_count += 1
+                    print(team_count, team_list[team_count])
+                except:
+                    break
+            await list_teams(current_list, ctx, None, "edit", countmax/10)
+    
+    @nextcord.ui.button(label='Next Page ⇨', style=nextcord.ButtonStyle.gray)
+    async def next(self, button: nextcord.ui.Button, ctx: nextcord.Interaction):
+        global team_count
+        async with bot.db.cursor() as cursor:
+            self.value = "next"
+            await cursor.execute("SELECT team FROM teams WHERE guild = ?", (ctx.guild.id,))
+            data = await cursor.fetchall()
+            team_names = []
+            team_list = []
+            for table in data:
+                if not table[0] in team_names and table[0] != "Unaffiliated":
+                    await cursor.execute("SELECT user FROM teams WHERE guild = ? AND team = ?", (ctx.guild.id, table[0]))
+                    members = await cursor.fetchall()
+                    memcount = len(members)
+                    team_names.append(table[0])
+                    team_list.append((table[0],memcount))
+                else:
+                    pass
+            try:
+                team_count
+            except:
+                print("nooo")
+                team_count = 10
+            try:
+                print(team_count, data[team_count])
+            except:
+                return await ctx.send(f"You're on the last page!", ephemeral=True)
+            current_list = []
+            countmax = team_count + 10
+            while team_count < countmax:
+                try:
+                    current_list.append(team_list[team_count])
+                    team_count += 1
+                    print(team_count, team_list[team_count])
+                except:
+                    team_count = countmax
+                    break
+            await list_teams(current_list, ctx, None, "edit",countmax/10)
+
+async def list_teams(lst,ctx,view,msgtype,page):
+    if msgtype == "new":
+        em = nextcord.Embed(
+            title="All Teams\n", color=nextcord.Color(int("CCB18C", 16)))
+
+        for table in lst:
+            name = table[0]
+            memcount = table[1]
+            em.add_field(name=name,
+                            value=f"Members: {memcount}​", inline=False)
+        em.add_field(name="\n",
+                     value=f"Page {page}", inline=False)
+        if view == None:
+            return await ctx.send(embed=em)
+        return await ctx.send(embed=em, view=view)
+    msg = ctx.message
+    em = nextcord.Embed(
+    title=f"All teams:\n", color=nextcord.Color(int("CCB18C", 16)))
+
+    for table in lst:
+        name = table[0]
+        memcount = table[1]
+        em.add_field(name=name,
+                            value=f"Members: {memcount}​", inline=False)
+    em.add_field(name="\n",
+                 value=f"Page {int(page)}", inline=False)
+    if view == None:
+        return await msg.edit(embed=em)
+    return await ctx.edit(embed=em, view=view)
+
 @bot.event
 async def on_ready():
     global all_teams
@@ -607,6 +719,7 @@ async def list(ctx: nextcord.Interaction):
     async with bot.db.cursor() as cursor:
         await cursor.execute("SELECT team FROM teams WHERE guild = ?", (ctx.guild.id,))
         data = await cursor.fetchall()
+        
         current_teams = []
         if data:
             em = nextcord.Embed(title="All Teams:", color=nextcord.Color(int("AE02D0", 16)))
