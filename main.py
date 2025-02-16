@@ -563,15 +563,23 @@ async def members(ctx: nextcord.Interaction, team: Optional[str] = nextcord.Slas
         async with bot.db.cursor() as cursor:
             await cursor.execute("SELECT user, rank FROM teams WHERE team = ? AND guild = ? ORDER BY rank DESC", (team, ctx.guild.id,))
             data = await cursor.fetchall()
+            print(data)
             if data:
                 em = nextcord.Embed(title=f"Members of {team}:", color=nextcord.Color(int(teamcolor.strip("#"), 16)))
                 count = 0
                 for table in data:
                     count += 1
-                    user = await nextcord.fetch_member(table[0])
-                    rank = table[1]
-                    em.add_field(name=f"{count}. {user.name}",
-                                value=f"{rank}", inline=False)
+                    print(table)
+                    try:
+                        user = ctx.guild.get_member(table[0])
+                        print(user)
+                        rank = table[1]
+                        em.add_field(name=f"{count}. {user.name}",
+                                    value=f"{rank}", inline=False)
+                    except:
+                        print("fuck")
+                        em.add_field(name=f"{count}. N/A",
+                                    value="N/A", inline=False)
                 return await ctx.send(embed = em)
             
 @members.on_autocomplete('team')
