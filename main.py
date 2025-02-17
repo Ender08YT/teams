@@ -391,18 +391,21 @@ def hex_to_rgb(value):
     lv = len(value)
     return tuple(int(value[i:i + lv // 3], 16) for i in range(0, lv, lv // 3))
 
-
+@bot.slash_command(description="Read up on what each command does!")
+async def help(ctx: nextcord.Interaction, type: str = nextcord.SlashOption(description="What type of commands would you like to view? ", choices=["Team","Admin"])):
+    if type == "Team":
+        embed = nextcord.Embed(
+        title="Commands:", description="\n● `/team create:` Creates a new team, if you have the permission to do so. \n\n● `/team join:` Joins a team in the server, if you have the permission to do so.\n\n● `/team leave:` Leaves your current team (and deletes it, if you're the owner and there are no other members in your team).\n\n● `/team list`: Lists all teams on the server.\n\n● `/team members`: Lists all of the members on the entered team (or yours, if nothing is entered).", color=0x777777,)
+        embed.add_field(name="Owner Only:", value="\n● `/team color`: Changes your team's color.\n\n● `/team rename`: Changes your team's name.\n\n● `/team add`: Adds a member to your team.\n\n● `/team remove`: Removes a member from your team.\n\n● `/team transfer`: Transfers ownership of your team.")
+    if type == "Admin":
+        embed = nextcord.Embed(
+        title="Admin Commands:", description="\n● `/delteam:` Deletes a team. \n\n● `/memreset:` Resets a member's data, **without** updating their roles. (There is practically no reason you would ever have to use this unless you've already messed up the bot)\n\n● `/jointoggle:` Toggles if members are able to join teams.\n\n● `/teamchannel`: Designates a channel for transactional messages.\n\n● `/maxmembers`: Sets the maximum number of members that can be on a team.", color=0xFFAACC,)
+    return await ctx.response.send_message(embed=embed, ephemeral=True)
 @bot.slash_command()
 async def team(interaction: nextcord.Interaction):
     pass
 
-@team.subcommand(description="help me")
-async def ohmygod(interaction: nextcord.Interaction):
-    async with bot.db.cursor() as cursor:
-        await check_server_for_data(ctx=interaction)
-        print('call me a good boy')
-
-@team.subcommand(description="create a new team")
+@team.subcommand(description="Create a new team")
 async def create(ctx: nextcord.Interaction, name: str = nextcord.SlashOption(description="Enter your team's name:"), color: str = nextcord.SlashOption(description="Enter a valid hex code for your team's color (e.g. #FFFFFF):")):
     await check_for_data(ctx=ctx)
     await check_server_for_data(ctx=ctx)
@@ -789,7 +792,7 @@ async def list(ctx: nextcord.Interaction):
         team_list = []
         current_teams = []
         if data:
-            em = nextcord.Embed(title="All Teams:", color=nextcord.Color(int("AE02D0", 16)))
+            em = nextcord.Embed(title="All Teams:", color=nextcord.Color(int("777777", 16)))
             for table in data:
                 if not table[0] in team_names and table[0] != "Unaffiliated":
                     await cursor.execute("SELECT user FROM teams WHERE guild = ? AND team = ?", (ctx.guild.id, table[0]))
