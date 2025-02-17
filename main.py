@@ -180,22 +180,26 @@ async def on_member_remove(member):
         await cursor.execute("SELECT channel FROM teams WHERE guild = ? AND team = ? AND rank = ?", (member.guild.id, team, "Owner"))
         channel = await cursor.fetchone()
         channel = member.guild.get_channel(channel[0])
-        await channel.delete()
+        if channel != None:
+            await channel.delete()
         # Deletes VC
         await cursor.execute("SELECT vchannel FROM teams WHERE guild = ? AND team = ? AND rank = ?", (member.guild.id, team, "Owner"))
         vchannel = await cursor.fetchone()
         vchannel = member.guild.get_channel(vchannel[0])
-        await vchannel.delete()
+        if vchannel != None:
+            await vchannel.delete()
         # Deletes category
         await cursor.execute("SELECT category FROM teams WHERE guild = ? AND team = ? AND rank = ?", (member.guild.id, team, "Owner"))
         category = await cursor.fetchone()
         category = member.guild.get_channel(category[0])
-        await category.delete()
+        if category != None:
+            await category.delete()
         # Deletes role
         await cursor.execute("SELECT role FROM teams WHERE guild = ? AND team = ? AND rank = ?", (member.guild.id, team, "Owner"))
         role = await cursor.fetchone()
         role = member.guild.get_role(role[0])
-        await role.delete()
+        if role != None:
+            await role.delete()
         # Updates teams.db        
         await cursor.execute("UPDATE teams SET role = ? WHERE team = ? AND guild = ?", (member.guild.default_role.id, team, member.guild.id,))
         await cursor.execute("UPDATE teams SET channel = ? WHERE team = ? AND guild = ?", (member.guild.system_channel.id, team, member.guild.id,))
@@ -325,25 +329,29 @@ class DelPrompt(nextcord.ui.View):
     async def confirm(self, button: nextcord.ui.Button, ctx: nextcord.Interaction):
         async with bot.db.cursor() as cursor:
             # Deletes channel
-            await cursor.execute("SELECT channel FROM teams WHERE guild = ? AND user = ?", (ctx.guild.id, ctx.user.id))
+            await cursor.execute("SELECT channel FROM teams WHERE guild = ? AND team = ? AND rank = ?", (ctx.guild.id, team, "Owner"))
             channel = await cursor.fetchone()
             channel = ctx.guild.get_channel(channel[0])
-            await channel.delete()
+            if channel != None:
+                await channel.delete()
             # Deletes VC
-            await cursor.execute("SELECT vchannel FROM teams WHERE guild = ? AND user = ?", (ctx.guild.id, ctx.user.id))
+            await cursor.execute("SELECT vchannel FROM teams WHERE guild = ? AND team = ? AND rank = ?", (ctx.guild.id, team, "Owner"))
             vchannel = await cursor.fetchone()
             vchannel = ctx.guild.get_channel(vchannel[0])
-            await vchannel.delete()
+            if vchannel != None:
+                await vchannel.delete()
             # Deletes category
-            await cursor.execute("SELECT category FROM teams WHERE guild = ? AND user = ?", (ctx.guild.id, ctx.user.id))
+            await cursor.execute("SELECT category FROM teams WHERE guild = ? AND team = ? AND rank = ?", (ctx.guild.id, team, "Owner"))
             category = await cursor.fetchone()
             category = ctx.guild.get_channel(category[0])
-            await category.delete()
+            if category != None:
+                await category.delete()
             # Deletes role
-            await cursor.execute("SELECT role FROM teams WHERE guild = ? AND user = ?", (ctx.guild.id, ctx.user.id))
+            await cursor.execute("SELECT role FROM teams WHERE guild = ? AND team = ? AND rank = ?", (ctx.guild.id, team, "Owner"))
             role = await cursor.fetchone()
             role = ctx.guild.get_role(role[0])
-            await role.delete()
+            if role != None:
+                await role.delete()
             # Updates teams.db
             await cursor.execute("UPDATE teams SET team = ? WHERE user = ? AND guild = ?", ("Unaffiliated", ctx.user.id, ctx.guild.id,))
             await cursor.execute("UPDATE teams SET role = ? WHERE user = ? AND guild = ?", (ctx.guild.default_role.id, ctx.user.id, ctx.guild.id,))
@@ -872,22 +880,26 @@ async def delteam(ctx: nextcord.Interaction, team: str = nextcord.SlashOption('t
         await cursor.execute("SELECT channel FROM teams WHERE guild = ? AND team = ? AND rank = ?", (ctx.guild.id, team, "Owner"))
         channel = await cursor.fetchone()
         channel = ctx.guild.get_channel(channel[0])
-        await channel.delete()
+        if channel != None:
+            await channel.delete()
         # Deletes VC
         await cursor.execute("SELECT vchannel FROM teams WHERE guild = ? AND team = ? AND rank = ?", (ctx.guild.id, team, "Owner"))
         vchannel = await cursor.fetchone()
         vchannel = ctx.guild.get_channel(vchannel[0])
-        await vchannel.delete()
+        if vchannel != None:
+            await vchannel.delete()
         # Deletes category
         await cursor.execute("SELECT category FROM teams WHERE guild = ? AND team = ? AND rank = ?", (ctx.guild.id, team, "Owner"))
         category = await cursor.fetchone()
         category = ctx.guild.get_channel(category[0])
-        await category.delete()
+        if category != None:
+            await category.delete()
         # Deletes role
         await cursor.execute("SELECT role FROM teams WHERE guild = ? AND team = ? AND rank = ?", (ctx.guild.id, team, "Owner"))
         role = await cursor.fetchone()
         role = ctx.guild.get_role(role[0])
-        await role.delete()
+        if role != None:
+            await role.delete()
         # Updates teams.db        
         await cursor.execute("UPDATE teams SET role = ? WHERE team = ? AND guild = ?", (ctx.guild.default_role.id, team, ctx.guild.id,))
         await cursor.execute("UPDATE teams SET channel = ? WHERE team = ? AND guild = ?", (ctx.guild.system_channel.id, team, ctx.guild.id,))
